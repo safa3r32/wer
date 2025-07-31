@@ -2,8 +2,9 @@ import discum
 import os
 from flask import Flask
 from threading import Thread
+import time
 
-# --- Keep Alive Sunucu Kodu ---
+# --- Keep Alive Sunucu Kodu (OnRender için) ---
 app = Flask('')
 
 @app.route('/')
@@ -20,44 +21,49 @@ def keep_alive():
 
 
 # --- discum Bot Kodu ---
-TOKEN = os.environ['TOKEN']
-# ID'leri discum'a string olarak vermek genellikle daha güvenlidir.
-GUILD_ID = os.environ['GUILD_ID']
-VOICE_CHANNEL_ID = os.environ['VOICE_CHANNEL_ID']
+# .env dosyasından veya OnRender ortam değişkenlerinden token'ı alın
+TOKEN = os.environ['TOKEN'] 
+# Artık sunucu ID'sine ihtiyacımız yok. Kanal ID'si grup sohbetinin ID'si olacak.
+GROUP_DM_ID = os.environ['VOICE_CHANNEL_ID'] 
 
 
 bot = discum.Client(
     token=TOKEN,
-    log=True
+    log=False # İsteğe bağlı: Daha temiz bir konsol için loglamayı kapatabilirsiniz
 )
 
-# Bu fonksiyon, sesli kanala katılmak için gerekli olan
-# opcode 4 payload'unu (ağ geçidi komutunu) oluşturur ve gönderir.
-# discum arka planda bu komutu işleyip ses websocket'ini ve
-# kalp atışlarını yönetecektir.
-def join_voice():
+# Bu fonksiyon, sesli kanala (grup aramasına) katılmak için 
+# gerekli olan opcode 4 payload'unu oluşturur ve gönderir.
+def join_voice_group():
+    print(f"[!] Grup aramasına ({GROUP_DM_ID}) katılma isteği hazırlanıyor...")
     # Bu, Discord'un ses durumu güncelleme komutudur (Opcode 4).
     payload = {
         "op": 4,
         "d": {
-            "guild_id": GUILD_ID,
-            "channel_id": VOICE_CHANNEL_ID,
+            # Grup aramaları için guild_id: None olmalıdır.
+            "guild_id": None, 
+            "channel_id": GROUP_DM_ID,
             "self_mute": True,  # Kendini sustur
             "self_deaf": True,   # Kendini sağırlaştır
         }
     }
     # Hazırladığımız komutu doğrudan gateway'e gönderiyoruz.
     bot.gateway.send(payload)
-    print(f"[✓] Ses kanalına ({VOICE_CHANNEL_ID}) katılma isteği doğrudan gönderildi.")
+    print(f"[✓] Grup aramasına ({GROUP_DM_ID}) katılma isteği gönderildi.")
 
 
 @bot.gateway.command
 def on_ready(resp):
     # Bot 'READY' olayını aldığında, yani Discord'a başarıyla bağlandığında...
     if resp.event.ready:
-        print("[✓] Gateway'e bağlanıldı ve READY olayı alındı.")
-        # Ses kanalına katılma fonksiyonunu çağır
-        join_voice()
+        print(f"[✓] {bot.user['username']}#{bot.user['discriminator']} olarak Gateway'e bağlanıldı.")
+        
+        # Bazen anında istek göndermek başarısız olabilir.
+        # Bağlantı tam olarak oturduktan sonra katılmak için küçük bir bekleme ekleyelim.
+        time.sleep(3) 
+        
+        # Grup aramasına katılma fonksiyonunu çağır
+        join_voice_group()
 
 # Projeyi başlat
 keep_alive()
